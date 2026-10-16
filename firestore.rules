@@ -1,0 +1,348 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Pillar 3 & 4: Proactive Default Deny & Reusable Primitives
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getAdminDoc() {
+      return get(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        (exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) &&
+         getAdminDoc().data.active == true);
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && getAdminDoc().data.role == 'super_admin';
+    }
+
+    function hasAdminRole(role) {
+      return isAdmin() && (getAdminDoc().data.role == role || isSuperAdmin());
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // -------------------------------------------------------------------------
+    // 1. Admin Users & RBAC
+    // -------------------------------------------------------------------------
+    match /adminUsers/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstName', 'lastName', 'avatarUrl']));
+      // Never allow deleting oneself, and require Super Admin permission
+      allow delete: if isSuperAdmin() && request.auth.uid != userId;
+    }
+
+    match /adminRoles/{roleId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    match /adminPermissions/{permId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Passengers & Wallets
+    // -------------------------------------------------------------------------
+    match /passengers/{passengerId} {
+      allow get: if isOwner(passengerId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(passengerId) || isAdmin();
+      allow update: if (isOwner(passengerId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'email', 'avatarUrl'])) || hasAdminRole('operations_admin') || hasAdminRole('support_admin');
+      allow delete: if isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Drivers & Fleet Verification
+    // -------------------------------------------------------------------------
+    match /drivers/{driverId} {
+      allow get: if isOwner(driverId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(driverId) || isAdmin();
+      allow update: if (isOwner(driverId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline', 'fcmToken', 'currentLocation'])) || hasAdminRole('operations_admin') || hasAdminRole('verification_admin') || hasAdminRole('safety_admin');
+      allow delete: if isSuperAdmin();
+    }
+
+    match /driverDocuments/{docId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (request.resource.data.driverId == request.auth.uid || hasAdminRole('verification_admin') || hasAdminRole('operations_admin'));
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if isSignedIn();
+      allow write: if hasAdminRole('operations_admin') || hasAdminRole('verification_admin');
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Rides, Real-Time Locations & Events
+    // -------------------------------------------------------------------------
+    match /rides/{rideId} {
+      allow get: if isSignedIn() && (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid || isAdmin());
+      allow list: if isAdmin() || (isSignedIn() && request.query.limit <= 50);
+      allow create: if isSignedIn();
+      // Completed rides can never have their finalFare altered
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid) &&
+        (!resource.data.keys().hasAny(['finalFare']) || resource.data.finalFare == request.resource.data.finalFare)
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /rideLocations/{locationId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /rideOffers/{offerId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Chronological event timeline is append-only
+    match /rideEvents/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Financials, Transactions & Immutable Ledgers
+    // -------------------------------------------------------------------------
+    match /payments/{paymentId} {
+      allow get: if isSignedIn() && (resource.data.passengerId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn();
+      allow update: if hasAdminRole('finance_admin');
+      allow delete: if false; // Immutable financial record
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isAdmin();
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false; // Pillar 6: Immutable Double-Entry Ledger
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.driverId == request.auth.uid || hasAdminRole('finance_admin'));
+      allow update: if hasAdminRole('finance_admin');
+      allow delete: if false; // Prevent payout erasure
+    }
+
+    match /refunds/{refundId} {
+      allow read: if isSignedIn() && (resource.data.passengerId == request.auth.uid || isAdmin());
+      allow create: if hasAdminRole('finance_admin');
+      allow update: if hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /reimbursements/{reimId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create, update: if hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /driverFines/{fineId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create, update: if hasAdminRole('safety_admin') || hasAdminRole('operations_admin') || hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /fineTransactions/{txId} {
+      allow read: if isAdmin();
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false;
+    }
+
+    match /wallets/{walletId} {
+      allow read: if isOwner(walletId) || isAdmin();
+      allow write: if hasAdminRole('finance_admin');
+    }
+
+    match /driverWallets/{driverId} {
+      allow read: if isOwner(driverId) || isAdmin();
+      allow write: if hasAdminRole('finance_admin');
+    }
+
+    match /paymentTransactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false; // Immutable payment transaction history
+    }
+
+    match /topUpRequests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.driverId == request.auth.uid || hasAdminRole('finance_admin'));
+      allow update: if hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /driverPayouts/{payoutId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.driverId == request.auth.uid || hasAdminRole('finance_admin'));
+      allow update: if hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /payoutTransactions/{txId} {
+      allow read: if isAdmin();
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false;
+    }
+
+    match /financialAdjustments/{adjId} {
+      allow read: if isAdmin();
+      allow create, update: if hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /reconciliationRecords/{recordId} {
+      allow read: if isAdmin();
+      allow write: if hasAdminRole('finance_admin');
+    }
+
+    match /comprehensiveTransactions/{txId} {
+      allow read: if isAdmin();
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false;
+    }
+
+    match /walletTransactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false;
+    }
+
+    match /walletLedger/{ledgerId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false; // Immutable financial ledger
+    }
+
+    match /paymentAttempts/{attemptId} {
+      allow read: if isSignedIn() && (resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if hasAdminRole('finance_admin');
+      allow delete: if false;
+    }
+
+    match /companyPaymentAccounts/{accId} {
+      allow read: if true; // Driver app needs to query active accounts dynamically for Top Up deposits
+      allow write: if hasAdminRole('finance_admin') || isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. Pricing, Cities & Operations Matrix
+    // -------------------------------------------------------------------------
+    match /pricingRules/{ruleId} {
+      allow read: if true; // Publicly readable by mobile apps to display upfront fares
+      allow write: if hasAdminRole('finance_admin');
+    }
+
+    match /pricingRuleVersions/{versionId} {
+      allow read: if isSignedIn();
+      allow create: if hasAdminRole('finance_admin');
+      allow update, delete: if false; // Immutable version snapshots
+    }
+
+    match /cities/{cityId} {
+      allow read: if true;
+      allow write: if hasAdminRole('operations_admin');
+    }
+
+    match /serviceCategories/{catId} {
+      allow read: if true;
+      allow write: if hasAdminRole('operations_admin');
+    }
+
+    match /promoCodes/{promoId} {
+      allow read: if true;
+      allow write: if hasAdminRole('operations_admin') || hasAdminRole('finance_admin');
+    }
+
+    match /promoUsage/{usageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. Safety & Support Systems
+    // -------------------------------------------------------------------------
+    match /safetyIncidents/{incidentId} {
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.reporterId == request.auth.uid));
+      allow create: if isSignedIn();
+      allow update: if hasAdminRole('safety_admin') || hasAdminRole('operations_admin');
+      allow delete: if isSuperAdmin();
+    }
+
+    match /safetyEventTimeline/{eventId} {
+      allow read: if isAdmin();
+      allow create: if hasAdminRole('safety_admin') || hasAdminRole('operations_admin');
+      allow update, delete: if false;
+    }
+
+    match /supportCases/{caseId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if hasAdminRole('support_admin') || hasAdminRole('operations_admin') || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /caseNotes/{noteId} {
+      allow read: if isAdmin();
+      allow create: if hasAdminRole('support_admin') || hasAdminRole('operations_admin');
+      allow update, delete: if false;
+    }
+
+    match /fraudRiskAlerts/{alertId} {
+      allow read: if isAdmin();
+      allow write: if hasAdminRole('safety_admin') || hasAdminRole('finance_admin');
+    }
+
+    match /riskRules/{ruleId} {
+      allow read: if isAdmin();
+      allow write: if hasAdminRole('safety_admin') || isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. Audit Logs & System Settings (Strict Append-Only for Audit)
+    // -------------------------------------------------------------------------
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // Strict immutability: nobody can edit or delete audit logs
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isSignedIn();
+      allow write: if hasAdminRole('operations_admin') || hasAdminRole('support_admin');
+    }
+
+    match /systemSettings/{settingId} {
+      allow read: if true; // Allows mobile app to check maintenance status
+      allow write: if isSuperAdmin(); // Super Admin exclusive
+    }
+  }
+}

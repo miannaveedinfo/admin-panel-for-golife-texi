@@ -1,0 +1,8 @@
+{
+  "name": "Final 34 GoLife Taxi Admin Panel",
+  "description": "Enterprise administration dashboard for GoLife Taxi Pakistan. Complete operational management for passengers, drivers, verifications, live rides, fares, payouts, safety, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

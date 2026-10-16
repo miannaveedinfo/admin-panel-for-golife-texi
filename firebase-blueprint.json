@@ -1,0 +1,352 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "GoLife Taxi admin console user accounts and role assignments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "operations_manager", "finance_manager", "safety_officer", "support_lead", "support_agent", "city_manager"] },
+        "permissions": { "type": "array", "items": { "type": "string" } },
+        "cityScope": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "role", "active"]
+    },
+    "Passenger": {
+      "title": "Passenger",
+      "description": "GoLife Passenger mobile app user profile and wallet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "city": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended", "blocked"] },
+        "rating": { "type": "number" },
+        "totalRides": { "type": "number" },
+        "walletBalance": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "fullName", "phoneNumber", "city", "status"]
+    },
+    "Driver": {
+      "title": "Driver",
+      "description": "GoLife Driver mobile app user profile, KYC and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "cnicNumber": { "type": "string" },
+        "city": { "type": "string" },
+        "vehicleCategory": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended", "blocked", "offline", "on_ride"] },
+        "isOnline": { "type": "boolean" },
+        "verificationStatus": { "type": "string", "enum": ["verified", "pending", "rejected"] },
+        "rating": { "type": "number" },
+        "acceptanceRate": { "type": "number" },
+        "cancellationRate": { "type": "number" },
+        "walletBalance": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "fullName", "phoneNumber", "city", "status", "verificationStatus"]
+    },
+    "Ride": {
+      "title": "Ride",
+      "description": "Master ride dispatch records connecting passenger, driver and fare",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "passengerId": { "type": "string" },
+        "passengerName": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "city": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["searching", "driver_assigned", "arrived", "in_progress", "completed", "cancelled"] },
+        "pickupAddress": { "type": "string" },
+        "destAddress": { "type": "string" },
+        "finalFare": { "type": "number" },
+        "distanceKm": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid", "refunded"] },
+        "pricingRuleVersionId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["id", "passengerId", "city", "category", "status", "finalFare"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment records for completed trips and wallet recharges",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rideId": { "type": "string" },
+        "passengerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "pending", "failed", "refunded"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "amount", "method", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Immutable ledger transaction entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referenceType": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string" },
+        "immutable": { "type": "boolean" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "amount", "timestamp"]
+    },
+    "Payout": {
+      "title": "Payout",
+      "description": "Driver payout records and bank disbursements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid", "rejected"] },
+        "method": { "type": "string" },
+        "accountDetails": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "driverId", "amount", "status"]
+    },
+    "DriverFine": {
+      "title": "DriverFine",
+      "description": "Administrative penalty tickets issued to drivers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "amount": { "type": "number" },
+        "violationType": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["unpaid", "paid", "waived", "disputed"] },
+        "issuedAt": { "type": "string" }
+      },
+      "required": ["id", "driverId", "amount", "status", "issuedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable administrative audit log of all system actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "adminRole": { "type": "string" },
+        "action": { "type": "string" },
+        "entity": { "type": "string" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "immutable": { "type": "boolean" }
+      },
+      "required": ["id", "adminEmail", "action", "timestamp"]
+    },
+    "SafetyIncident": {
+      "title": "SafetyIncident",
+      "description": "Emergency SOS and safety incidents with timeline tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rideId": { "type": "string" },
+        "reporterType": { "type": "string", "enum": ["passenger", "driver", "system"] },
+        "status": { "type": "string", "enum": ["active", "investigating", "resolved", "false_alarm"] },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "title": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "status", "severity", "createdAt"]
+    },
+    "CentralPricingRule": {
+      "title": "CentralPricingRule",
+      "description": "Master fare configuration rules, category rates, city overrides, and platform commission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "versionId": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "versionId"]
+    },
+    "DriverWallet": {
+      "title": "DriverWallet",
+      "description": "Driver ledger balance, escrow holds, cash collection debt, and credit limits",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "balance": { "type": "number" },
+        "pendingEscrow": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Suspended", "Under_Review", "Blocked"] }
+      },
+      "required": ["id", "driverId", "balance", "currency"]
+    },
+    "CentralPaymentTransaction": {
+      "title": "CentralPaymentTransaction",
+      "description": "Double-entry financial ledger transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "direction": { "type": "string", "enum": ["Credit", "Debit"] },
+        "balanceAfter": { "type": "number" },
+        "status": { "type": "string", "enum": ["Success", "Pending", "Failed", "Reversed"] },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "driverId", "amount", "direction", "status", "timestamp"]
+    },
+    "TopUpRequest": {
+      "title": "TopUpRequest",
+      "description": "Driver wallet recharge submission via mobile banking or till",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "amount": { "type": "number" },
+        "provider": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected", "Under_Review", "Completed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "driverId", "amount", "provider", "referenceId", "status"]
+    },
+    "PassengerRefundRecord": {
+      "title": "PassengerRefundRecord",
+      "description": "Audited passenger fare refunds and wallet credits",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "refundCode": { "type": "string" },
+        "rideId": { "type": "string" },
+        "passengerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "completed", "rejected"] },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "refundCode", "passengerId", "amount", "status"]
+    },
+    "DriverReimbursementRecord": {
+      "title": "DriverReimbursementRecord",
+      "description": "Driver expense reimbursement records for tolls and cleaning",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reimbursementCode": { "type": "string" },
+        "driverId": { "type": "string" },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "completed", "rejected"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "reimbursementCode", "driverId", "amount", "status"]
+    },
+    "ReconciliationRecord": {
+      "title": "ReconciliationRecord",
+      "description": "Cross-system financial reconciliation records between ride fares, payments, and driver ledger",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rideId": { "type": "string" },
+        "rideFareRecorded": { "type": "number" },
+        "paymentRecorded": { "type": "number" },
+        "differenceAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["matched", "review_required"] }
+      },
+      "required": ["id", "rideId", "status"]
+    }
+  },
+  "firestore": {
+    "/adminUsers/{userId}": {
+      "schema": "AdminUser",
+      "description": "Admin accounts with role permissions"
+    },
+    "/passengers/{passengerId}": {
+      "schema": "Passenger",
+      "description": "Passenger profiles and wallets"
+    },
+    "/drivers/{driverId}": {
+      "schema": "Driver",
+      "description": "Driver profiles and verification status"
+    },
+    "/rides/{rideId}": {
+      "schema": "Ride",
+      "description": "Trips dispatched in Pakistan cities"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Financial payment transaction records"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Immutable financial double-entry ledger"
+    },
+    "/payouts/{payoutId}": {
+      "schema": "Payout",
+      "description": "Driver bank and wallet withdrawals"
+    },
+    "/driverFines/{fineId}": {
+      "schema": "DriverFine",
+      "description": "Driver fines and violation penalties"
+    },
+    "/auditLogs/{auditId}": {
+      "schema": "AuditLog",
+      "description": "Write-only immutable administrative audit logs"
+    },
+    "/safetyIncidents/{incidentId}": {
+      "schema": "SafetyIncident",
+      "description": "Emergency and safety incident records"
+    },
+    "/pricingRules/{ruleId}": {
+      "schema": "CentralPricingRule",
+      "description": "Master and versioned pricing configuration rules"
+    },
+    "/driverWallets/{driverId}": {
+      "schema": "DriverWallet",
+      "description": "Driver balances and financial status"
+    },
+    "/paymentTransactions/{txId}": {
+      "schema": "CentralPaymentTransaction",
+      "description": "Authoritative immutable payment transactions"
+    },
+    "/topUpRequests/{requestId}": {
+      "schema": "TopUpRequest",
+      "description": "Driver wallet recharge requests and approvals"
+    },
+    "/refunds/{refundId}": {
+      "schema": "PassengerRefundRecord",
+      "description": "Passenger refunds and reversals"
+    },
+    "/reimbursements/{reimId}": {
+      "schema": "DriverReimbursementRecord",
+      "description": "Driver toll and expense reimbursements"
+    },
+    "/reconciliationRecords/{recordId}": {
+      "schema": "ReconciliationRecord",
+      "description": "Financial reconciliation audit records"
+    }
+  }
+}
